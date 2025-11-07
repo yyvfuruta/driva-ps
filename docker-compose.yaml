@@ -1,0 +1,127 @@
+services:
+  postgres_db:
+    image: postgres:16-alpine
+    container_name: my_postgres
+    hostname: postgres_db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: asdf
+      POSTGRES_DB: app
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_volume:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d app"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: my_rabbitmq
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: asdf
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: ghcr.io/yyvfuruta/driva-ps/api:latest
+    container_name: api
+    hostname: api
+    environment:
+      DB_HOST: postgres_db
+      DB_PORT: 5432
+      DB_USER_NAME: admin
+      DB_USER_PASS: asdf
+      DB_NAME: app
+      DB_SSL_MODE: disable
+      RABBITMQ_USER_NAME: admin
+      RABBITMQ_USER_PASS: asdf
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      AUTH_TOKEN: cecd24ae-bbd6-11f0-bbc0-2c0da77e0ef5
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  worker1:
+    image: ghcr.io/yyvfuruta/driva-ps/worker1:latest
+    container_name: worker1
+    hostname: worker1
+    environment:
+      DB_HOST: postgres_db
+      DB_PORT: 5432
+      DB_USER_NAME: admin
+      DB_USER_PASS: asdf
+      DB_NAME: app
+      DB_SSL_MODE: disable
+      RABBITMQ_USER_NAME: admin
+      RABBITMQ_USER_PASS: asdf
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  worker2:
+    image: ghcr.io/yyvfuruta/driva-ps/worker2:latest
+    container_name: worker2
+    hostname: worker2
+    environment:
+      DB_HOST: postgres_db
+      DB_PORT: 5432
+      DB_USER_NAME: admin
+      DB_USER_PASS: asdf
+      DB_NAME: app
+      DB_SSL_MODE: disable
+      RABBITMQ_USER_NAME: admin
+      RABBITMQ_USER_PASS: asdf
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  worker3:
+    image: ghcr.io/yyvfuruta/driva-ps/worker3:latest
+    container_name: worker3
+    hostname: worker3
+    environment:
+      DB_HOST: postgres_db
+      DB_PORT: 5432
+      DB_USER_NAME: admin
+      DB_USER_PASS: asdf
+      DB_NAME: app
+      DB_SSL_MODE: disable
+      RABBITMQ_USER_NAME: admin
+      RABBITMQ_USER_PASS: asdf
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  postgres_volume:
+    driver: local

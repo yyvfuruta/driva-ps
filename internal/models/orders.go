@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
@@ -46,9 +47,10 @@ type OrderModel struct {
 	DB *sql.DB
 }
 
-func (o OrderModel) Get(orderID uuid.UUID) (*Order, error) {
+func (o OrderModel) Get(ctx context.Context, orderID uuid.UUID) (*Order, error) {
 	order := &Order{}
-	row := o.DB.QueryRow(
+	row := o.DB.QueryRowContext(
+		ctx,
 		`SELECT id, customer_id, status, total_amount, created_at, updated_at FROM orders WHERE id = $1`,
 		orderID,
 	)
@@ -57,7 +59,8 @@ func (o OrderModel) Get(orderID uuid.UUID) (*Order, error) {
 		return nil, err
 	}
 
-	rows, err := o.DB.Query(
+	rows, err := o.DB.QueryContext(
+		ctx,
 		`SELECT id, sku, qty FROM order_items WHERE order_id = $1`,
 		orderID,
 	)
@@ -78,13 +81,13 @@ func (o OrderModel) Get(orderID uuid.UUID) (*Order, error) {
 	return order, nil
 }
 
-func (o OrderModel) Insert(order *Order) error {
-	tx, err := o.DB.Begin()
+func (o OrderModel) Insert(ctx context.Context, order *Order) error {
+	tx, err := o.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO orders (id, customer_id, status, total_amount, created_at, updated_at) 
+	stmt, err := tx.PrepareContext(ctx, `INSERT INTO orders (id, customer_id, status, total_amount, created_at, updated_at) 
         VALUES ($1, $2, $3, $4, $5, $6)`)
 	if err != nil {
 		tx.Rollback()
@@ -92,13 +95,13 @@ func (o OrderModel) Insert(order *Order) error {
 	}
 	defer stmt.Close()
 
-	_, err = stmt.Exec(order.ID, order.CustomerID, order.Status, order.TotalAmount, order.CreatedAt, order.UpdatedAt)
+	_, err = stmt.ExecContext(ctx, order.ID, order.CustomerID, order.Status, order.TotalAmount, order.CreatedAt, order.UpdatedAt)
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
 
-	stmt, err = tx.Prepare(`INSERT INTO order_items (order_id, sku, qty) VALUES ($1, $2, $3)`)
+	stmt, err = tx.PrepareContext(ctx, `INSERT INTO order_items (order_id, sku, qty) VALUES ($1, $2, $3)`)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -106,7 +109,7 @@ func (o OrderModel) Insert(order *Order) error {
 	defer stmt.Close()
 
 	for _, item := range order.Items {
-		_, err = stmt.Exec(order.ID, item.SKU, item.Qty)
+		_, err = stmt.ExecContext(ctx, order.ID, item.SKU, item.Qty)
 		if err != nil {
 			tx.Rollback()
 			return err
@@ -116,8 +119,9 @@ func (o OrderModel) Insert(order *Order) error {
 	return tx.Commit()
 }
 
-func (o OrderModel) Update(orderID uuid.UUID, status string) error {
-	_, err := o.DB.Exec(
+func (o OrderModel) Update(ctx context.Context, orderID uuid.UUID, status string) error {
+	_, err := o.DB.ExecContext(
+		ctx,
 		`UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2`,
 		status,
 		orderID,

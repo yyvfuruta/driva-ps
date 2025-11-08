@@ -29,8 +29,10 @@ func (app *application) createOrderHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	ctx := r.Context()
+
 	// If idempotencyKey already exists.
-	key, err := app.models.IdempotencyKey.Get(idempotencyKey)
+	key, err := app.models.IdempotencyKey.Get(ctx, idempotencyKey)
 	if err == nil {
 		response := struct {
 			OrderID uuid.UUID `json:"order_id"`
@@ -62,12 +64,12 @@ func (app *application) createOrderHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err := app.models.Order.Insert(order); err != nil {
+	if err := app.models.Order.Insert(ctx, order); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	if err := app.models.IdempotencyKey.Insert(idempotencyKey, order.ID); err != nil {
+	if err := app.models.IdempotencyKey.Insert(ctx, idempotencyKey, order.ID); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -129,7 +131,7 @@ func (app *application) getOrderHandler(w http.ResponseWriter, r *http.Request) 
 
 	// Check cache:
 	cacheKey := fmt.Sprintf("order:%s", idStr)
-	ctx := context.Background()
+	ctx := r.Context()
 	cachedData, err := app.redis.Get(ctx, cacheKey).Result()
 	if err == nil {
 		log.Printf("[%s] Returing cached order\n", idStr)
@@ -144,7 +146,7 @@ func (app *application) getOrderHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Check DB:
-	order, err := app.models.Order.Get(orderID)
+	order, err := app.models.Order.Get(ctx, orderID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -153,7 +155,7 @@ func (app *application) getOrderHandler(w http.ResponseWriter, r *http.Request) 
 	var orderEnriched *models.OrderEnrichment
 
 	if order.Status == "completed" {
-		orderEnriched, err = app.models.Enrichment.Get(orderID)
+		orderEnriched, err = app.models.Enrichment.Get(ctx, orderID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

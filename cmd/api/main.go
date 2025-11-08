@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
@@ -71,9 +75,30 @@ func main() {
 	if port == "" {
 		log.Fatal("API_PORT empty")
 	}
-	log.Printf("API starting on port %s\n", port)
-	log.Fatal(http.ListenAndServe(
-		fmt.Sprintf(":%s", port),
-		mux,
-	))
+
+	srv := &http.Server{
+		Addr:    fmt.Sprintf(":%s", port),
+		Handler: mux,
+	}
+
+	go func() {
+		log.Printf("API starting on port %s\n", port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Could not listen on %s: %v\n", port, err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("Shutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("Server forced to shutdown: %v", err)
+	}
+
+	log.Println("Server exiting")
 }

@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"flag"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
@@ -27,6 +30,9 @@ func main() {
 			os.Exit(1)
 		}
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	rabbit, err := queue.NewConnection()
 	if err != nil {
@@ -95,8 +101,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	forever := make(chan bool)
-
 	db, err := database.NewConnection()
 	if err != nil {
 		logger.Error("Failed to connect to database", "error", err)
@@ -106,25 +110,45 @@ func main() {
 
 	appModels := models.NewModels(db)
 
-	go func() {
-		for msg := range msgs {
-			var input models.Order
-			if err := json.Unmarshal(msg.Body, &input); err != nil {
-				logger.Error("Error decoding message", "error", err)
-				msg.Nack(false, false)
-				continue
-			}
-			logger.Info("Received a message enriched", "order_id", input.ID)
+	var wg sync.WaitGroup
+	wg.Add(1)
 
-			if err := appModels.Order.Update(context.Background(), input.ID, "completed"); err != nil {
-				logger.Error("Error updating order status to completed", "error", err)
-				msg.Nack(false, false)
-				continue
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				logger.Info("Shutting down worker...")
+				return
+			case msg, ok := <-msgs:
+				if !ok {
+					logger.Info("Channel closed, shutting down.")
+					return
+				}
+				var input models.Order
+				if err := json.Unmarshal(msg.Body, &input); err != nil {
+					logger.Error("Error decoding message", "error", err)
+					msg.Nack(false, false)
+					continue
+				}
+				logger.Info("Received a message enriched", "order_id", input.ID)
+
+				if err := appModels.Order.Update(ctx, input.ID, "completed"); err != nil {
+					logger.Error("Error updating order status to completed", "error", err)
+					msg.Nack(false, false)
+					continue
+				}
+				msg.Ack(false)
 			}
-			msg.Ack(false)
 		}
 	}()
 
 	logger.Info(" [*] Waiting for messages. To exit press CTRL+C")
-	<-forever
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	<-sigCh
+
+	cancel()
+	wg.Wait()
+	logger.Info("Worker shutdown complete.")
 }

@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"flag"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
@@ -30,6 +33,9 @@ func main() {
 			os.Exit(1)
 		}
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	rabbit, err := queue.NewConnection()
 	if err != nil {
@@ -98,8 +104,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	forever := make(chan bool)
-
 	db, err := database.NewConnection()
 	if err != nil {
 		logger.Error("Failed to connect to database", "error", err)
@@ -109,49 +113,68 @@ func main() {
 
 	appModels := models.NewModels(db)
 
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
-		for msg := range msgs {
-			var order models.Order
-			if err := json.Unmarshal(msg.Body, &order); err != nil {
-				logger.Error("Error decoding message", "error", err)
-				msg.Nack(false, false)
-				continue
-			}
-			logger.Info("Received order", "order_id", order.ID)
+		defer wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				logger.Info("Shutting down worker...")
+				return
+			case msg, ok := <-msgs:
+				if !ok {
+					logger.Info("Channel closed, shutting down.")
+					return
+				}
+				var order models.Order
+				if err := json.Unmarshal(msg.Body, &order); err != nil {
+					logger.Error("Error decoding message", "error", err)
+					msg.Nack(false, false)
+					continue
+				}
+				logger.Info("Received order", "order_id", order.ID)
 
-			body, err := json.Marshal(order)
-			if err != nil {
-				logger.Error("Error marshalling order", "error", err)
-				msg.Nack(false, false)
-				continue
-			}
+				body, err := json.Marshal(order)
+				if err != nil {
+					logger.Error("Error marshalling order", "error", err)
+					msg.Nack(false, false)
+					continue
+				}
 
-			err = appModels.Order.Update(context.Background(), order.ID, "processing")
-			if err != nil {
-				logger.Error("Error updating order", "error", err)
-				msg.Nack(false, false)
-				continue
-			}
+				err = appModels.Order.Update(ctx, order.ID, "processing")
+				if err != nil {
+					logger.Error("Error updating order", "error", err)
+					msg.Nack(false, false)
+					continue
+				}
 
-			if err := ch.Publish(
-				"order.events",               // exchange
-				"order.enrichment.requested", // routing key
-				false,                        // mandatory
-				false,                        // immediate
-				amqp.Publishing{
-					ContentType: "application/json",
-					Body:        body,
-				},
-			); err != nil {
-				logger.Error("Error publishing message", "error", err)
-				msg.Nack(false, false)
-				continue
-			}
+				if err := ch.PublishWithContext(ctx,
+					"order.events",               // exchange
+					"order.enrichment.requested", // routing key
+					false,                        // mandatory
+					false,                        // immediate
+					amqp.Publishing{
+						ContentType: "application/json",
+						Body:        body,
+					},
+				); err != nil {
+					logger.Error("Error publishing message", "error", err)
+					msg.Nack(false, false)
+					continue
+				}
 
-			msg.Ack(false)
+				msg.Ack(false)
+			}
 		}
 	}()
 
 	logger.Info(" [*] Waiting for messages. To exit press CTRL+C")
-	<-forever
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	<-sigCh
+
+	cancel()
+	wg.Wait()
+	logger.Info("Worker shutdown complete.")
 }

@@ -29,10 +29,6 @@ cd k8s
 kubectl apply -k .
 ```
 
-Observação: o deploy da API e dos workers inicialmente não vai funcionar, pois
-é necessário esperar o RabbitMQ e o PostgreSQL subirem. Depois que esses
-estiverem em "Running", o resto vai - eventualmente - reiniciar e subir.
-
 ### Execução das Migrations
 
 ```sh

@@ -59,7 +59,7 @@ spec:
           command: ['sh', '-c', 'until nc -z rabbitmq-headless 5672; do echo "waiting for rabbitmq"; sleep 2; done;']
       containers:
         - name: api
-          image: ghcr.io/yyvfuruta/driva-ps-api:latest
+          image: ghcr.io/yyvfuruta/driva-ps-api:main
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
@@ -175,7 +175,7 @@ spec:
           command: ['sh', '-c', 'until nc -z rabbitmq-headless 5672; do echo "waiting for rabbitmq"; sleep 2; done;']
       containers:
         - name: worker1
-          image: ghcr.io/yyvfuruta/driva-ps-worker1:latest
+          image: ghcr.io/yyvfuruta/driva-ps-worker1:main
           imagePullPolicy: Always
           env:
             - name: DB_HOST
@@ -249,7 +249,7 @@ spec:
           command: ['sh', '-c', 'until nc -z rabbitmq-headless 5672; do echo "waiting for rabbitmq"; sleep 2; done;']
       containers:
         - name: worker2
-          image: ghcr.io/yyvfuruta/driva-ps-worker2:latest
+          image: ghcr.io/yyvfuruta/driva-ps-worker2:main
           imagePullPolicy: Always
           env:
             - name: DB_HOST
@@ -323,7 +323,7 @@ spec:
           command: ['sh', '-c', 'until nc -z rabbitmq-headless 5672; do echo "waiting for rabbitmq"; sleep 2; done;']
       containers:
         - name: worker3
-          image: ghcr.io/yyvfuruta/driva-ps-worker3:latest
+          image: ghcr.io/yyvfuruta/driva-ps-worker3:main
           imagePullPolicy: Always
           env:
             - name: DB_HOST

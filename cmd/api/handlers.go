@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/yyvfuruta/driva-ps/internal/models"
@@ -124,6 +127,23 @@ func (app *application) getOrderHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Check cache:
+	cacheKey := fmt.Sprintf("order:%s", idStr)
+	ctx := context.Background()
+	cachedData, err := app.redis.Get(ctx, cacheKey).Result()
+	if err == nil {
+		log.Printf("[%s] Returing cached order\n", idStr)
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Cache", "HIT")
+		w.Write([]byte(cachedData))
+		return
+	}
+	if err != redis.Nil {
+		http.Error(w, "Redis error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Check DB:
 	order, err := app.models.Order.Get(orderID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
@@ -147,6 +167,18 @@ func (app *application) getOrderHandler(w http.ResponseWriter, r *http.Request) 
 		Order:         order,
 		OrderEnriched: orderEnriched,
 	}
+
+	responseJSON, err := json.Marshal(response)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Cache reponse:
+	if err := app.redis.Set(ctx, cacheKey, responseJSON, 1*time.Hour).Err(); err != nil {
+		log.Printf("Could not save order to cache: %v", err)
+	}
+	log.Printf("[%s] Saving order to cache\n", response.Order.ID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)

@@ -14,7 +14,43 @@ spec:
       labels:
         app: api
     spec:
+      volumes:
+        - name: migrations-volume
+          configMap:
+            name: api-migrations
       initContainers:
+        - name: db-migration
+          image: postgres:15-alpine
+          command: ['sh', '-c', 'echo "Waiting for PostgreSQL to become available..." && until pg_isready -h $PG_HOST -p $PG_PORT -U $PG_USER; do sleep 2; done; echo "PostgreSQL is available. Running migrations..." && psql -h $PG_HOST -p $PG_PORT -U $PG_USER -d $PG_DBNAME -f /migrations/001_initial_schema.sql']
+          env:
+            - name: PG_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: app
+                  key: dbHost
+            - name: PG_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: app
+                  key: dbPort
+            - name: PG_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app
+                  key: dbUserName
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app
+                  key: dbUserPass
+            - name: PG_DBNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: app
+                  key: dbName
+          volumeMounts:
+            - name: migrations-volume
+              mountPath: /migrations
         - name: wait-for-postgres
           image: busybox:1.28
           command: ['sh', '-c', 'until nc -z postgres-headless 5432; do echo "waiting for postgres"; sleep 2; done;']

@@ -14,29 +14,10 @@ Requisitos:
 docker compose up -d
 ```
 
-### Deploy com Kubernetes
-
-Requisitos:
-- Docker
-- KinD/Minikube
-
-```sh
-# Para criar o cluster:
-kind create cluster
-
-# Aplicar os manifestos:
-cd k8s
-kubectl apply -k .
-```
-
 ### Execução das Migrations
 
 ```sh
-# Conecte-se ao BD no Kubernetes:
-kubectl exec -it po/postgres-0 -- psql "host=localhost port=5432 user=admin password=asdf dbname=app"
-
-# Conecte-se ao BD no Docker:
-docker exec -it my_postgres psql "host=localhost port=5432 user=admin password=asdf dbname=app"
+docker exec -it my_postgres psql "host=localhost port=5432 user=admin password=asdf dbname=app" -f ./migrations/
 
 # Crie as tabelas:
 CREATE TABLE IF NOT EXISTS orders (
@@ -68,6 +49,22 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 ```
+### Deploy com Kubernetes
+
+Requisitos:
+- Docker
+- KinD/Minikube
+
+```sh
+# Para criar o cluster:
+kind create cluster
+
+# Aplicar os manifestos:
+kubectl apply -k ./k8s
+```
+
+> [!NOTE]
+> Com o deploy no Kubernetes, não precisa rodar as migrations. Ela vai rodar automaticamente.
 
 ## Uso
 

@@ -42,7 +42,7 @@ services:
       - "6379:6379"
 
   api:
-    image: ghcr.io/yyvfuruta/driva-ps/api:latest
+    image: ghcr.io/yyvfuruta/driva-ps-api:latest
     container_name: api
     hostname: api
     environment:
@@ -69,7 +69,7 @@ services:
         condition: service_healthy
 
   worker1:
-    image: ghcr.io/yyvfuruta/driva-ps/worker1:latest
+    image: ghcr.io/yyvfuruta/driva-ps-worker1:latest
     container_name: worker1
     hostname: worker1
     environment:
@@ -90,7 +90,7 @@ services:
         condition: service_healthy
 
   worker2:
-    image: ghcr.io/yyvfuruta/driva-ps/worker2:latest
+    image: ghcr.io/yyvfuruta/driva-ps-worker2:latest
     container_name: worker2
     hostname: worker2
     environment:
@@ -111,7 +111,7 @@ services:
         condition: service_healthy
 
   worker3:
-    image: ghcr.io/yyvfuruta/driva-ps/worker3:latest
+    image: ghcr.io/yyvfuruta/driva-ps-worker3:latest
     container_name: worker3
     hostname: worker3
     environment:

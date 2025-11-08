@@ -17,7 +17,7 @@ docker compose up -d
 ### Execução das Migrations
 
 ```sh
-docker exec -it my_postgres psql "host=localhost port=5432 user=admin password=asdf dbname=app" -f ./migrations/
+docker exec -it my_postgres psql "host=localhost port=5432 user=admin password=asdf dbname=app"
 
 # Crie as tabelas:
 CREATE TABLE IF NOT EXISTS orders (

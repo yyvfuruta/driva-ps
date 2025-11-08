@@ -183,3 +183,40 @@ func (app *application) getOrderHandler(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
+
+func (app *application) healthzHandler(w http.ResponseWriter, r *http.Request) {
+	response := map[string]string{
+		"status": "alive",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
+
+func (app *application) readyzHandler(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	// Check Database connection
+	if err := app.db.PingContext(ctx); err != nil {
+		log.Printf("Readiness check failed: database ping error: %v", err)
+		http.Error(w, "database not ready", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Check Redis connection
+	if err := app.redis.Ping(ctx).Err(); err != nil {
+		log.Printf("Readiness check failed: redis ping error: %v", err)
+		http.Error(w, "redis not ready", http.StatusServiceUnavailable)
+		return
+	}
+
+	response := map[string]string{
+		"status": "ready",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"flag"
 	"fmt"
 	"log"
@@ -18,6 +19,7 @@ import (
 )
 
 type application struct {
+	db     *sql.DB
 	rabbit *amqp.Connection
 	models models.Models
 	redis  *redis.Client
@@ -53,6 +55,7 @@ func main() {
 	}
 
 	app := &application{
+		db:     db,
 		rabbit: rabbitConn,
 		models: models.NewModels(db),
 		redis:  rdb,
@@ -61,6 +64,8 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /orders", authMiddleware(app.createOrderHandler))
 	mux.HandleFunc("GET /orders/{id}", app.getOrderHandler)
+	mux.HandleFunc("GET /healthz", app.healthzHandler)
+	mux.HandleFunc("GET /readyz", app.readyzHandler)
 
 	port := os.Getenv("API_PORT")
 	if port == "" {

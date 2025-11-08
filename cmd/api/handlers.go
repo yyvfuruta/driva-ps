@@ -176,7 +176,7 @@ func (app *application) getOrderHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Cache reponse:
-	if err := app.redis.Set(ctx, cacheKey, responseJSON, 1*time.Hour).Err(); err != nil {
+	if err := app.redis.Set(ctx, cacheKey, responseJSON, 1*time.Minute).Err(); err != nil {
 		app.logger.Error("Could not save order to cache", "error", err)
 	}
 	app.logger.Info("Saving order to cache", "order_id", response.Order.ID)

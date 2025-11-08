@@ -1,9 +1,10 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
-	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	_ "github.com/lib/pq"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/yyvfuruta/driva-ps/internal/database"
+	"github.com/yyvfuruta/driva-ps/internal/logger"
 	"github.com/yyvfuruta/driva-ps/internal/models"
 	"github.com/yyvfuruta/driva-ps/internal/queue"
 )
@@ -32,21 +34,26 @@ func main() {
 	flag.BoolVar(&dev, "dev", false, "Enable godotenv")
 	flag.Parse()
 
+	logger := logger.New()
+
 	if dev {
 		if err := godotenv.Load(); err != nil {
-			log.Fatal(err)
+			logger.Error("Error loading .env file", "error", err)
+			os.Exit(1)
 		}
 	}
 
 	rabbit, err := queue.NewConnection()
 	if err != nil {
-		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
+		logger.Error("Failed to connect to RabbitMQ", "error", err)
+		os.Exit(1)
 	}
 	defer rabbit.Close()
 
 	ch, err := rabbit.Channel()
 	if err != nil {
-		log.Fatalf("Failed to open a channel: %v", err)
+		logger.Error("Failed to open a channel", "error", err)
+		os.Exit(1)
 	}
 	defer ch.Close()
 
@@ -60,7 +67,8 @@ func main() {
 		nil,                     // arguments
 	)
 	if err != nil {
-		log.Fatal(err)
+		logger.Error("Failed to declare an exchange", "error", err)
+		os.Exit(1)
 	}
 
 	enrichmentRequestQueue, err := ch.QueueDeclare(
@@ -76,7 +84,8 @@ func main() {
 		}, // args
 	)
 	if err != nil {
-		log.Fatalf("Failed to declare a queue: %v", err)
+		logger.Error("Failed to declare a queue", "error", err)
+		os.Exit(1)
 	}
 
 	err = ch.QueueBind(
@@ -87,10 +96,11 @@ func main() {
 		nil,                             // args
 	)
 	if err != nil {
-		log.Fatalf("Failed to declare a queue: %v", err)
+		logger.Error("Failed to bind a queue", "error", err)
+		os.Exit(1)
 	}
 
-	enrichmentRequests, err := ch.Consume(
+	msgs, err := ch.Consume(
 		enrichmentRequestQueue.Name, // queue
 		"",                          // consumer
 		false,                       // auto-ack
@@ -100,67 +110,67 @@ func main() {
 		nil,                         // args
 	)
 	if err != nil {
-		log.Fatalf("Failed to register a consumer: %v", err)
+		logger.Error("Failed to register a consumer", "error", err)
+		os.Exit(1)
 	}
-
-	forever := make(chan bool)
 
 	db, err := database.NewConnection()
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		logger.Error("Failed to connect to database", "error", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
 	appModels := models.NewModels(db)
 
 	go func() {
-		for d := range enrichmentRequests {
+		for msg := range msgs {
 			var input models.Order
-			if err := json.Unmarshal(d.Body, &input); err != nil {
-				log.Printf("Error decoding message: %s", err)
-				d.Nack(false, false)
+			if err := json.Unmarshal(msg.Body, &input); err != nil {
+				logger.Error("Error decoding message", "error", err)
+				msg.Nack(false, false)
 				continue
 			}
-			log.Printf("[%s] Received a message for enrichment", input.ID)
+			logger.Info("Received a message for enrichment", "order_id", input.ID)
 
-			retryCount := getRetryCount(d.Headers)
+			retryCount := getRetryCount(msg.Headers)
 
 			if retryCount >= maxRetries {
-				if err := appModels.Order.Update(input.ID, "failed"); err != nil {
-					log.Println(err)
+				if err := appModels.Order.Update(context.Background(), input.ID, "failed"); err != nil {
+					logger.Error("Error updating order", "error", err)
 				} else {
-					log.Printf("[%s] Order exceded maximum retries allowed", input.ID)
+					logger.Info("Order exceded maximum retries allowed", "order_id", input.ID)
 				}
-				d.Ack(false)
+				msg.Ack(false)
 				continue
 			}
 
 			// Failure simulation:
 			if strings.Contains(input.CustomerID, "f") {
-				log.Printf("[%s] Simulated failure (count: %d)", input.ID.String(), retryCount)
-				d.Nack(false, false)
+				logger.Info("Simulated failure", "order_id", input.ID.String(), "retry_count", retryCount)
+				msg.Nack(false, false)
 				continue
 			}
 
-			log.Printf("[%s] Starting data enrichment", input.ID)
+			logger.Info("Starting data enrichment", "order_id", input.ID)
 			time.Sleep(5 * time.Second)
-			log.Printf("[%s] Finished data enrichment", input.ID)
+			logger.Info("Finished data enrichment", "order_id", input.ID)
 
 			enrichment := &models.OrderEnrichment{
 				OrderID: input.ID,
 				Data:    []byte(`{"message": "enriched"}`),
 			}
 
-			if err := appModels.Enrichment.Insert(enrichment); err != nil {
-				log.Printf("Error creating enrichment: %s", err)
-				d.Nack(false, false)
+			if err := appModels.Enrichment.Insert(context.Background(), enrichment); err != nil {
+				logger.Error("Error creating enrichment", "error", err)
+				msg.Nack(false, false)
 				continue
 			}
 
 			body, err := json.Marshal(input)
 			if err != nil {
-				log.Printf("Error marshalling order: %s", err)
-				d.Nack(false, false)
+				logger.Error("Error marshalling order", "error", err)
+				msg.Nack(false, false)
 				continue
 			}
 
@@ -175,16 +185,17 @@ func main() {
 				},
 			)
 			if err != nil {
-				log.Printf("Error publishing message: %s", err)
-				d.Nack(false, false)
+				logger.Error("Error publishing message", "error", err)
+				msg.Nack(false, false)
 				continue
 			}
 
-			d.Ack(false)
+			msg.Ack(false)
 		}
 	}()
 
-	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
+	forever := make(chan bool)
+	logger.Info(" [*] Waiting for messages. To exit press CTRL+C")
 	<-forever
 }
 

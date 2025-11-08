@@ -1,13 +1,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
-	"log"
+	"os"
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/yyvfuruta/driva-ps/internal/database"
+	"github.com/yyvfuruta/driva-ps/internal/logger"
 	"github.com/yyvfuruta/driva-ps/internal/models"
 	"github.com/yyvfuruta/driva-ps/internal/queue"
 )
@@ -17,21 +19,26 @@ func main() {
 	flag.BoolVar(&dev, "dev", false, "Enable godotenv")
 	flag.Parse()
 
+	logger := logger.New()
+
 	if dev {
 		if err := godotenv.Load(); err != nil {
-			log.Fatal(err)
+			logger.Error("Error loading .env file", "error", err)
+			os.Exit(1)
 		}
 	}
 
 	rabbit, err := queue.NewConnection()
 	if err != nil {
-		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
+		logger.Error("Failed to connect to RabbitMQ", "error", err)
+		os.Exit(1)
 	}
 	defer rabbit.Close()
 
 	ch, err := rabbit.Channel()
 	if err != nil {
-		log.Fatalf("Failed to open a channel: %v", err)
+		logger.Error("Failed to open a channel", "error", err)
+		os.Exit(1)
 	}
 	defer ch.Close()
 
@@ -45,7 +52,8 @@ func main() {
 		nil,            // arguments
 	)
 	if err != nil {
-		log.Fatal(err)
+		logger.Error("Failed to declare an exchange", "error", err)
+		os.Exit(1)
 	}
 
 	q, err := ch.QueueDeclare(
@@ -57,7 +65,8 @@ func main() {
 		nil,              // arguments
 	)
 	if err != nil {
-		log.Fatalf("Failed to declare a queue: %v", err)
+		logger.Error("Failed to declare a queue", "error", err)
+		os.Exit(1)
 	}
 
 	err = ch.QueueBind(
@@ -68,7 +77,8 @@ func main() {
 		nil,              // args
 	)
 	if err != nil {
-		log.Fatalf("Failed to declare a queue: %v", err)
+		logger.Error("Failed to bind a queue", "error", err)
+		os.Exit(1)
 	}
 
 	msgs, err := ch.Consume(
@@ -81,14 +91,16 @@ func main() {
 		nil,    // args
 	)
 	if err != nil {
-		log.Fatalf("Failed to register a consumer: %v", err)
+		logger.Error("Failed to register a consumer", "error", err)
+		os.Exit(1)
 	}
 
 	forever := make(chan bool)
 
 	db, err := database.NewConnection()
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		logger.Error("Failed to connect to database", "error", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
@@ -98,14 +110,14 @@ func main() {
 		for msg := range msgs {
 			var input models.Order
 			if err := json.Unmarshal(msg.Body, &input); err != nil {
-				log.Printf("Error decoding message: %s", err)
+				logger.Error("Error decoding message", "error", err)
 				msg.Nack(false, false)
 				continue
 			}
-			log.Printf("[%s] Received a message enriched", input.ID)
+			logger.Info("Received a message enriched", "order_id", input.ID)
 
-			if err := appModels.Order.Update(input.ID, "completed"); err != nil {
-				log.Printf("Error updating order status to completed")
+			if err := appModels.Order.Update(context.Background(), input.ID, "completed"); err != nil {
+				logger.Error("Error updating order status to completed", "error", err)
 				msg.Nack(false, false)
 				continue
 			}
@@ -113,6 +125,6 @@ func main() {
 		}
 	}()
 
-	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
+	logger.Info(" [*] Waiting for messages. To exit press CTRL+C")
 	<-forever
 }

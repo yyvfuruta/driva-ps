@@ -2,12 +2,12 @@
 
 ## Como subir o ambiente
 
-Você pode subir o ambiente localmente com Docker ou com KIND/Minikube.
+Você pode subir o ambiente localmente com Docker ou com KinD/Minikube.
 
 ### Deploy com Docker
 
 Requisitos:
-- docker
+- Docker
 
 ```sh
 # Para subir os serviços localmente em background:
@@ -18,7 +18,7 @@ docker compose up -d
 
 Requisitos:
 - Docker
-- Kind/Minikube
+- KinD/Minikube
 
 ```sh
 # Para criar o cluster:

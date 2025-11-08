@@ -63,7 +63,7 @@ kind create cluster
 kubectl apply -k ./k8s
 ```
 
-> ![NOTE]
+> [!NOTE]
 > Com o deploy no Kubernetes, não precisa rodar as migrations. Ela vai rodar automaticamente.
 
 ## Uso

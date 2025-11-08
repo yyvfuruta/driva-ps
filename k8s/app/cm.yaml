@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app
+data:
+  dbHost: postgres-headless.default.svc
+  dbPort: "5432"
+  dbName: app
+  dbSSLMode: disable
+
+  rabbitmqHost: rabbitmq-headless.default.svc
+  rabbitmqPort: "5672"

@@ -12,18 +12,66 @@ Requisitos:
 ```sh
 # Para subir os serviços localmente em background:
 docker compose up -d
-
-psql "host=localhost port=5432 user=admin password=asdf dbname=app" \
-    -f ./migrations/001_initial_schema.sql
 ```
 
 ### Deploy com Kubernetes
 
 Requisitos:
-- Ambiente Kubernetes com uma CNI (ex.: Flannel, Cilium, Calico, etc) e com um
-  StorageClass configurado.
+- Docker
+- Kind/Minikube
 
-<https://gitlab.c3sl.ufpr.br/yyvf22/k8s-test>
+```sh
+# Para criar o cluster:
+kind create cluster
+
+# Aplicar os manifestos:
+cd k8s
+kubectl apply -k .
+```
+
+Observação: o deploy da API e dos workers inicialmente não vai funcionar, pois
+é necessário esperar o RabbitMQ e o PostgreSQL subirem. Depois que esses
+estiverem em "Running", o resto vai - eventualmente - reiniciar e subir.
+
+### Execução das Migrations
+
+```sh
+# Conecte-se ao BD no Kubernetes:
+kubectl exec -it po/postgres-0 -- psql "host=localhost port=5432 user=admin password=asdf dbname=app"
+
+# Conecte-se ao BD no Docker:
+docker exec -it my_postgres psql "host=localhost port=5432 user=admin password=asdf dbname=app"
+
+# Crie as tabelas:
+CREATE TABLE IF NOT EXISTS orders (
+    id uuid PRIMARY KEY,
+    customer_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    total_amount NUMERIC(12, 2),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS order_items (
+    id SERIAL PRIMARY KEY,
+    order_id uuid NOT NULL REFERENCES orders(id),
+    sku TEXT NOT NULL,
+    qty INT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS order_enrichments (
+    id SERIAL PRIMARY KEY,
+    order_id uuid NOT NULL REFERENCES orders(id),
+    data JSONB,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+    key TEXT PRIMARY KEY,
+    order_id uuid NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+```
 
 ## Uso
 
@@ -54,7 +102,7 @@ curl -XPOST --location 'http://localhost:8080/orders' \
 	}'
 ```
 
-### Para consultar um pedido
+#### Para consultar um pedido
 
 Para consultar o pedido você precisa do ID do pedido. Esse ID é informado ao
 criar o pedido.
@@ -100,7 +148,7 @@ psql "host=localhost port=5432 user=admin password=asdf dbname=app"
 # Para consultar as tabelas existentes:
 app=# \dt
 
-# Para consultar os registros da tabela X:
-app=# SELECT * FROM X;
+# Para consultar os registros da tabela orders:
+app=# SELECT * FROM orders;
 ```
 

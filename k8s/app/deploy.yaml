@@ -1,0 +1,282 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels:
+    app: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+      - name: api
+        image: ghcr.io/yyvfuruta/driva-ps/api:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        env:
+          - name: DB_HOST
+            valueFrom:
+              configMapKeyRef:
+                name: app
+                key: dbHost
+          - name: DB_PORT
+            valueFrom:
+              configMapKeyRef:
+                name: app
+                key: dbPort
+          - name: DB_USER_NAME
+            valueFrom:
+              secretKeyRef:
+                name: app
+                key: dbUserName
+          - name: DB_USER_PASS
+            valueFrom:
+              secretKeyRef:
+                name: app
+                key: dbUserPass
+          - name: DB_NAME
+            valueFrom:
+              configMapKeyRef:
+                name: app
+                key: dbName
+
+          - name: RABBITMQ_USER_NAME
+            valueFrom:
+              secretKeyRef:
+                name: app
+                key: rabbitmqUserName
+          - name: RABBITMQ_USER_PASS
+            valueFrom:
+              secretKeyRef:
+                name: app
+                key: rabbitmqUserPass
+          - name: RABBITMQ_HOST
+            valueFrom:
+              configMapKeyRef:
+                name: app
+                key: rabbitmqHost
+          - name: RABBITMQ_PORT
+            valueFrom:
+              configMapKeyRef:
+                name: app
+                key: rabbitmqPort
+
+          - name: AUTH_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: app
+                key: authToken
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker1
+  labels:
+    app: worker1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: worker1
+  template:
+    metadata:
+      labels:
+        app: worker1
+    spec:
+      containers:
+      - name: worker1
+        image: ghcr.io/yyvfuruta/driva-ps/worker1:latest
+        imagePullPolicy: Always
+        env:
+          - name: DB_HOST
+            valueFrom:
+              configMapKeyRef:
+                name: app
+                key: dbHost
+          - name: DB_PORT
+            valueFrom:
+              configMapKeyRef:
+                name: app
+                key: dbPort
+          - name: DB_USER_NAME
+            valueFrom:
+              secretKeyRef:
+                name: app
+                key: dbUserName
+          - name: DB_USER_PASS
+            valueFrom:
+              secretKeyRef:
+                name: app
+                key: dbUserPass
+          - name: DB_NAME
+            valueFrom:
+              configMapKeyRef:
+                name: app
+                key: dbName
+
+          - name: RABBITMQ_USER_NAME
+            valueFrom:
+              secretKeyRef:
+                name: app
+                key: rabbitmqUserName
+          - name: RABBITMQ_USER_PASS
+            valueFrom:
+              secretKeyRef:
+                name: app
+                key: rabbitmqUserPass
+          - name: RABBITMQ_HOST
+            valueFrom:
+              configMapKeyRef:
+                name: app
+                key: rabbitmqHost
+          - name: RABBITMQ_PORT
+            valueFrom:
+              configMapKeyRef:
+                name: app
+                key: rabbitmqPort
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker2
+  labels:
+    app: worker2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: worker2
+  template:
+    metadata:
+      labels:
+        app: worker2
+    spec:
+      containers:
+      - name: worker2
+        image: ghcr.io/yyvfuruta/driva-ps/worker2:latest
+        imagePullPolicy: Always
+        env:
+          - name: DB_HOST
+            valueFrom:
+              configMapKeyRef:
+                name: app
+                key: dbHost
+          - name: DB_PORT
+            valueFrom:
+              configMapKeyRef:
+                name: app
+                key: dbPort
+          - name: DB_USER_NAME
+            valueFrom:
+              secretKeyRef:
+                name: app
+                key: dbUserName
+          - name: DB_USER_PASS
+            valueFrom:
+              secretKeyRef:
+                name: app
+                key: dbUserPass
+          - name: DB_NAME
+            valueFrom:
+              configMapKeyRef:
+                name: app
+                key: dbName
+
+          - name: RABBITMQ_USER_NAME
+            valueFrom:
+              secretKeyRef:
+                name: app
+                key: rabbitmqUserName
+          - name: RABBITMQ_USER_PASS
+            valueFrom:
+              secretKeyRef:
+                name: app
+                key: rabbitmqUserPass
+          - name: RABBITMQ_HOST
+            valueFrom:
+              configMapKeyRef:
+                name: app
+                key: rabbitmqHost
+          - name: RABBITMQ_PORT
+            valueFrom:
+              configMapKeyRef:
+                name: app
+                key: rabbitmqPort
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker3
+  labels:
+    app: worker3
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: worker3
+  template:
+    metadata:
+      labels:
+        app: worker3
+    spec:
+      containers:
+      - name: worker3
+        image: ghcr.io/yyvfuruta/driva-ps/worker3:latest
+        imagePullPolicy: Always
+        env:
+          - name: DB_HOST
+            valueFrom:
+              configMapKeyRef:
+                name: app
+                key: dbHost
+          - name: DB_PORT
+            valueFrom:
+              configMapKeyRef:
+                name: app
+                key: dbPort
+          - name: DB_USER_NAME
+            valueFrom:
+              secretKeyRef:
+                name: app
+                key: dbUserName
+          - name: DB_USER_PASS
+            valueFrom:
+              secretKeyRef:
+                name: app
+                key: dbUserPass
+          - name: DB_NAME
+            valueFrom:
+              configMapKeyRef:
+                name: app
+                key: dbName
+
+          - name: RABBITMQ_USER_NAME
+            valueFrom:
+              secretKeyRef:
+                name: app
+                key: rabbitmqUserName
+          - name: RABBITMQ_USER_PASS
+            valueFrom:
+              secretKeyRef:
+                name: app
+                key: rabbitmqUserPass
+          - name: RABBITMQ_HOST
+            valueFrom:
+              configMapKeyRef:
+                name: app
+                key: rabbitmqHost
+          - name: RABBITMQ_PORT
+            valueFrom:
+              configMapKeyRef:
+                name: app
+                key: rabbitmqPort
+

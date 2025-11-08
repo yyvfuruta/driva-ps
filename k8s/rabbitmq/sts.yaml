@@ -33,9 +33,9 @@ spec:
             exec:
               command: ["rabbitmq-diagnostics", "check_port_connectivity"]
             initialDelaySeconds: 30 # Aumentado para dar tempo de iniciar
-            periodSeconds: 10       # 'interval'
-            timeoutSeconds: 5         # 'timeout'
-            failureThreshold: 5       # 'retries'
+            periodSeconds: 10 # 'interval'
+            timeoutSeconds: 5 # 'timeout'
+            failureThreshold: 5 # 'retries'
           readinessProbe:
             exec:
               command: ["rabbitmq-diagnostics", "check_running"]

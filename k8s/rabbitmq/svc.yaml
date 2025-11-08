@@ -21,7 +21,7 @@ spec:
   selector:
     app: rabbitmq
   ports:
-    - port: 15672       # Porta interna do Service
+    - port: 15672 # Porta interna do Service
       targetPort: 15672 # Porta do contêiner (http-mgmt)
       protocol: TCP
       name: http-mgmt

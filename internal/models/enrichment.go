@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
@@ -19,7 +20,7 @@ type OrderEnrichmentModel struct {
 	DB *sql.DB
 }
 
-func (o *OrderEnrichmentModel) Insert(enrichment *OrderEnrichment) error {
+func (o *OrderEnrichmentModel) Insert(ctx context.Context, enrichment *OrderEnrichment) error {
 	if enrichment == nil {
 		return fmt.Errorf("enrichment can't be nil")
 	}
@@ -37,7 +38,8 @@ func (o *OrderEnrichmentModel) Insert(enrichment *OrderEnrichment) error {
 		return fmt.Errorf("enrichment.DB can't be nil")
 	}
 
-	_, err = o.DB.Exec(
+	_, err = o.DB.ExecContext(
+		ctx,
 		`INSERT INTO order_enrichments (order_id, data, created_at) VALUES ($1, $2, NOW())`,
 		enrichment.OrderID,
 		enrichment.Data,
@@ -46,7 +48,7 @@ func (o *OrderEnrichmentModel) Insert(enrichment *OrderEnrichment) error {
 }
 
 // Get busca um OrderEnrichment pelo order_id.
-func (o *OrderEnrichmentModel) Get(orderID uuid.UUID) (*OrderEnrichment, error) {
+func (o *OrderEnrichmentModel) Get(ctx context.Context, orderID uuid.UUID) (*OrderEnrichment, error) {
 	if o.DB == nil {
 		return nil, fmt.Errorf("enrichment.DB can't be nil")
 	}
@@ -61,7 +63,7 @@ func (o *OrderEnrichmentModel) Get(orderID uuid.UUID) (*OrderEnrichment, error) 
 
 	var enrichment OrderEnrichment
 
-	err = o.DB.QueryRow(stmt, orderID).Scan(
+	err = o.DB.QueryRowContext(ctx, stmt, orderID).Scan(
 		&enrichment.ID,
 		&enrichment.OrderID,
 		&enrichment.Data,

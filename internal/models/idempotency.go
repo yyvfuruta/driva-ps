@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"database/sql"
 	"time"
 
@@ -17,9 +18,9 @@ type IdempotencyKeyModel struct {
 	DB *sql.DB
 }
 
-func (i IdempotencyKeyModel) Get(key string) (*IdempotencyKey, error) {
+func (i IdempotencyKeyModel) Get(ctx context.Context, key string) (*IdempotencyKey, error) {
 	idempotencyKey := &IdempotencyKey{}
-	row := i.DB.QueryRow(`SELECT key, order_id, created_at FROM idempotency_keys WHERE key = $1`, key)
+	row := i.DB.QueryRowContext(ctx, `SELECT key, order_id, created_at FROM idempotency_keys WHERE key = $1`, key)
 	err := row.Scan(&idempotencyKey.Key, &idempotencyKey.OrderID, &idempotencyKey.CreatedAt)
 	if err != nil {
 		return nil, err
@@ -27,8 +28,9 @@ func (i IdempotencyKeyModel) Get(key string) (*IdempotencyKey, error) {
 	return idempotencyKey, nil
 }
 
-func (i IdempotencyKeyModel) Insert(key string, orderID uuid.UUID) error {
-	_, err := i.DB.Exec(
+func (i IdempotencyKeyModel) Insert(ctx context.Context, key string, orderID uuid.UUID) error {
+	_, err := i.DB.ExecContext(
+		ctx,
 		`INSERT INTO idempotency_keys (key, order_id, created_at) VALUES ($1, $2, NOW())`,
 		key,
 		orderID,

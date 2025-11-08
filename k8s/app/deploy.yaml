@@ -28,6 +28,12 @@ spec:
           ports:
             - containerPort: 8080
           env:
+            - name: API_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: app
+                  key: apiPort
+
             - name: DB_HOST
               valueFrom:
                 configMapKeyRef:
@@ -53,6 +59,7 @@ spec:
                 configMapKeyRef:
                   name: app
                   key: dbName
+
             - name: RABBITMQ_USER_NAME
               valueFrom:
                 secretKeyRef:
@@ -73,11 +80,23 @@ spec:
                 configMapKeyRef:
                   name: app
                   key: rabbitmqPort
+
             - name: AUTH_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: app
                   key: authToken
+
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: app
+                  key: redisHost
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: app
+                  key: redisPort
 ---
 apiVersion: apps/v1
 kind: Deployment

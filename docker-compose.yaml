@@ -35,6 +35,12 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:latest
+    container_name: my_redis
+    ports:
+      - "6379:6379"
+
   api:
     image: ghcr.io/yyvfuruta/driva-ps/api:latest
     container_name: api
@@ -51,6 +57,8 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       AUTH_TOKEN: cecd24ae-bbd6-11f0-bbc0-2c0da77e0ef5
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     ports:
       - "8080:8080"
     depends_on:

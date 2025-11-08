@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,6 +18,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/yyvfuruta/driva-ps/internal/cache"
 	"github.com/yyvfuruta/driva-ps/internal/database"
+	"github.com/yyvfuruta/driva-ps/internal/logger"
 	"github.com/yyvfuruta/driva-ps/internal/models"
 	"github.com/yyvfuruta/driva-ps/internal/queue"
 )
@@ -27,6 +28,7 @@ type application struct {
 	rabbit *amqp.Connection
 	models models.Models
 	redis  *redis.Client
+	logger *slog.Logger
 }
 
 func main() {
@@ -34,28 +36,34 @@ func main() {
 	flag.BoolVar(&dev, "dev", false, "Enable godotenv")
 	flag.Parse()
 
+	logger := logger.New()
+
 	if dev {
 		err := godotenv.Load()
 		if err != nil {
-			log.Fatal(err)
+			logger.Error("Error loading .env file", "error", err)
+			os.Exit(1)
 		}
 	}
 
 	db, err := database.NewConnection()
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		logger.Error("Failed to connect to database", "error", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
 	rabbitConn, err := queue.NewConnection()
 	if err != nil {
-		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
+		logger.Error("Failed to connect to RabbitMQ", "error", err)
+		os.Exit(1)
 	}
 	defer rabbitConn.Close()
 
 	rdb, err := cache.NewConnection()
 	if err != nil {
-		log.Fatalf("Failed to connect to Redis: %v", err)
+		logger.Error("Failed to connect to Redis", "error", err)
+		os.Exit(1)
 	}
 
 	app := &application{
@@ -63,6 +71,7 @@ func main() {
 		rabbit: rabbitConn,
 		models: models.NewModels(db),
 		redis:  rdb,
+		logger: logger,
 	}
 
 	mux := http.NewServeMux()
@@ -73,7 +82,8 @@ func main() {
 
 	port := os.Getenv("API_PORT")
 	if port == "" {
-		log.Fatal("API_PORT empty")
+		logger.Error("API_PORT empty")
+		os.Exit(1)
 	}
 
 	srv := &http.Server{
@@ -82,23 +92,25 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("API starting on port %s\n", port)
+		logger.Info("API starting", "port", port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Could not listen on %s: %v\n", port, err)
+			logger.Error("Could not listen on", "port", port, "error", err)
+			os.Exit(1)
 		}
 	}()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	log.Println("Shutting down server...")
+	logger.Info("Shutting down server...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
+		logger.Error("Server forced to shutdown", "error", err)
+		os.Exit(1)
 	}
 
-	log.Println("Server exiting")
+	logger.Info("Server exiting")
 }

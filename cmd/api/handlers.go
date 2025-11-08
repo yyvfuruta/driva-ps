@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
@@ -134,7 +133,7 @@ func (app *application) getOrderHandler(w http.ResponseWriter, r *http.Request) 
 	ctx := r.Context()
 	cachedData, err := app.redis.Get(ctx, cacheKey).Result()
 	if err == nil {
-		log.Printf("[%s] Returing cached order\n", idStr)
+		app.logger.Info("Returing cached order", "order_id", idStr)
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-Cache", "HIT")
 		w.Write([]byte(cachedData))
@@ -178,9 +177,9 @@ func (app *application) getOrderHandler(w http.ResponseWriter, r *http.Request) 
 
 	// Cache reponse:
 	if err := app.redis.Set(ctx, cacheKey, responseJSON, 1*time.Hour).Err(); err != nil {
-		log.Printf("Could not save order to cache: %v", err)
+		app.logger.Error("Could not save order to cache", "error", err)
 	}
-	log.Printf("[%s] Saving order to cache\n", response.Order.ID)
+	app.logger.Info("Saving order to cache", "order_id", response.Order.ID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
@@ -202,14 +201,14 @@ func (app *application) readyzHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Check Database connection
 	if err := app.db.PingContext(ctx); err != nil {
-		log.Printf("Readiness check failed: database ping error: %v", err)
+		app.logger.Error("Readiness check failed: database ping error", "error", err)
 		http.Error(w, "database not ready", http.StatusServiceUnavailable)
 		return
 	}
 
 	// Check Redis connection
 	if err := app.redis.Ping(ctx).Err(); err != nil {
-		log.Printf("Readiness check failed: redis ping error: %v", err)
+		app.logger.Error("Readiness check failed: redis ping error", "error", err)
 		http.Error(w, "redis not ready", http.StatusServiceUnavailable)
 		return
 	}

@@ -42,7 +42,9 @@ services:
       - "6379:6379"
 
   api:
-    image: ghcr.io/yyvfuruta/driva-ps-api:main
+    build:
+      context: .
+      dockerfile: Containerfile.api
     container_name: api
     hostname: api
     environment:
@@ -69,7 +71,9 @@ services:
         condition: service_healthy
 
   worker1:
-    image: ghcr.io/yyvfuruta/driva-ps-worker1:main
+    build:
+      context: .
+      dockerfile: Containerfile.worker1
     container_name: worker1
     hostname: worker1
     environment:
@@ -90,7 +94,9 @@ services:
         condition: service_healthy
 
   worker2:
-    image: ghcr.io/yyvfuruta/driva-ps-worker2:main
+    build:
+      context: .
+      dockerfile: Containerfile.worker2
     container_name: worker2
     hostname: worker2
     environment:
@@ -111,7 +117,9 @@ services:
         condition: service_healthy
 
   worker3:
-    image: ghcr.io/yyvfuruta/driva-ps-worker3:main
+    build:
+      context: .
+      dockerfile: Containerfile.worker3
     container_name: worker3
     hostname: worker3
     environment:

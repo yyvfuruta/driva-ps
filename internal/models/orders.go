@@ -61,7 +61,7 @@ func (o OrderModel) Get(ctx context.Context, orderID uuid.UUID) (*Order, error) 
 
 	rows, err := o.DB.QueryContext(
 		ctx,
-		`SELECT id, sku, qty FROM order_items WHERE order_id = $1`,
+		`SELECT id, order_id, sku, qty FROM order_items WHERE order_id = $1`,
 		orderID,
 	)
 	if err != nil {
@@ -71,7 +71,7 @@ func (o OrderModel) Get(ctx context.Context, orderID uuid.UUID) (*Order, error) 
 
 	for rows.Next() {
 		item := OrderItem{}
-		err = rows.Scan(&item.ID, &item.SKU, &item.Qty)
+		err = rows.Scan(&item.ID, &item.OrderID, &item.SKU, &item.Qty)
 		if err != nil {
 			return nil, err
 		}

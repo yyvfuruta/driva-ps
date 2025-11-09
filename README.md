@@ -134,6 +134,8 @@ curl -XPOST --location 'http://localhost:8080/orders' \
 
 ## Como ver os registros do banco
 
+Dentro do container do PostgreSQL:
+
 ```sh
 # Para se conectar no banco:
 psql "host=localhost port=5432 user=admin password=asdf dbname=app"
@@ -145,3 +147,19 @@ app=# \dt
 app=# SELECT * FROM orders;
 ```
 
+## Como ver os registros no cache
+
+Dentro do container do Redis:
+
+```sh
+redis-cli
+
+# Para listar todas as chaves:
+> KEYS *
+
+# Para ver o valor de uma chave:
+> GET $KEY
+
+# Para ver o TTL de uma chave:
+> TTL $KEY
+```

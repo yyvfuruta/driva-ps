@@ -1,17 +1,15 @@
-# 1. Service Headless (necessário para o StatefulSet)
 apiVersion: v1
 kind: Service
 metadata:
   name: rabbitmq-headless
 spec:
-  clusterIP: None # Isso o torna "headless"
+  clusterIP: None
   selector:
     app: rabbitmq
   ports:
     - port: 5672
       name: amqp
 ---
-# 2. Service para expor a interface de gerenciamento
 apiVersion: v1
 kind: Service
 metadata:
@@ -21,8 +19,7 @@ spec:
   selector:
     app: rabbitmq
   ports:
-    - port: 15672 # Porta interna do Service
-      targetPort: 15672 # Porta do contêiner (http-mgmt)
+    - port: 15672
+      targetPort: 15672
       protocol: TCP
       name: http-mgmt
-      # nodePort: 31000 # Opcional: fixe uma porta (ex: 31000). Se omitido, o K8s escolhe uma.

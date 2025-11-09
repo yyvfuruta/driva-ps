@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: rabbitmq
-          image: rabbitmq:3.13-management-alpine # Sua imagem
+          image: rabbitmq:3.13-management-alpine
           ports:
             - containerPort: 5672
               name: amqp
@@ -32,10 +32,10 @@ spec:
           livenessProbe:
             exec:
               command: ["rabbitmq-diagnostics", "check_port_connectivity"]
-            initialDelaySeconds: 30 # Aumentado para dar tempo de iniciar
-            periodSeconds: 10 # 'interval'
-            timeoutSeconds: 5 # 'timeout'
-            failureThreshold: 5 # 'retries'
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
           readinessProbe:
             exec:
               command: ["rabbitmq-diagnostics", "check_running"]
@@ -46,7 +46,7 @@ spec:
     - metadata:
         name: data
       spec:
-        accessModes: ["ReadWriteOnce"] # Padrão para a maioria dos discos
+        accessModes: ["ReadWriteOnce"]
         resources:
           requests:
-            storage: 2Gi # Ajuste o tamanho conforme necessário
+            storage: 2Gi

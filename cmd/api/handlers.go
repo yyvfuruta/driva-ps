@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/yyvfuruta/driva-ps/internal/models"
@@ -115,9 +115,17 @@ func (app *application) createOrderHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	response := struct {
+		ID      uuid.UUID `json:"id"`
+		Message string    `json:"msg"`
+	}{
+		ID:      order.ID,
+		Message: "Order created succesfully",
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(order)
+	json.NewEncoder(w).Encode(response)
 }
 
 func (app *application) getOrderHandler(w http.ResponseWriter, r *http.Request) {

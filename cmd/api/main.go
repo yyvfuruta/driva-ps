@@ -12,10 +12,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/redis/go-redis/v9"
 	"github.com/yyvfuruta/driva-ps/internal/cache"
 	"github.com/yyvfuruta/driva-ps/internal/database"
 	"github.com/yyvfuruta/driva-ps/internal/logger"

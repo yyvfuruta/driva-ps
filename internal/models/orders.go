@@ -25,7 +25,8 @@ func ValidateOrder(v *validator.Validator, order *Order) {
 
 	v.Check(order.TotalAmount >= 0.0, "total_amount", "must be zero or positive")
 
-	v.Check(len(order.Items) >= 0, "items", "must be zero or positive")
+	v.Check(order.Items != nil, "items", "must be provided")
+	v.Check(len(order.Items) > 0, "items", "must be positive")
 
 	for i, item := range order.Items {
 		itemKeySKU := fmt.Sprintf("items[%d].sku", i)

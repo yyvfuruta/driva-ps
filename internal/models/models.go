@@ -8,7 +8,7 @@ type Models struct {
 	Enrichment     OrderEnrichmentModel
 }
 
-func NewModels(db *sql.DB) Models {
+func New(db *sql.DB) Models {
 	return Models{
 		Order:          OrderModel{DB: db},
 		IdempotencyKey: IdempotencyKeyModel{DB: db},

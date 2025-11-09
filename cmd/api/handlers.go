@@ -10,13 +10,14 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 
-	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/yyvfuruta/driva-ps/internal/broker"
 	"github.com/yyvfuruta/driva-ps/internal/models"
 	"github.com/yyvfuruta/driva-ps/internal/validator"
 )
 
 func (app *application) createOrderHandler(w http.ResponseWriter, r *http.Request) {
 	var input models.Order
+
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -79,38 +80,12 @@ func (app *application) createOrderHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	ch, err := app.rabbit.Channel()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer ch.Close()
-
-	err = ch.ExchangeDeclare(
-		"order.events", // name
-		"direct",       // type
-		true,           // durable
-		false,          // auto-deleted
-		false,          // internal
-		false,          // no-wait
-		nil,            // arguments
-	)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	err = ch.Publish(
-		"order.events",  // exchange
-		"order.created", // routing key
-		false,           // mandatory
-		false,           // immediate
-		amqp.Publishing{
-			ContentType: "application/json",
-			Body:        body,
-		},
-	)
-	if err != nil {
+	if err := app.broker.Publish(
+		ctx,
+		broker.OrderEventsExchangeName,
+		broker.OrderCreatedRoutingKey,
+		body,
+	); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -136,9 +111,10 @@ func (app *application) getOrderHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	ctx := r.Context()
+
 	// Check cache:
 	cacheKey := fmt.Sprintf("order:%s", idStr)
-	ctx := r.Context()
 	cachedData, err := app.redis.Get(ctx, cacheKey).Result()
 	if err == nil {
 		app.logger.Info("Returing cached order", "order_id", idStr)
@@ -207,17 +183,24 @@ func (app *application) readyzHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	// Check Database connection
+	// Check database connection
 	if err := app.db.PingContext(ctx); err != nil {
 		app.logger.Error("Readiness check failed: database ping error", "error", err)
 		http.Error(w, "database not ready", http.StatusServiceUnavailable)
 		return
 	}
 
-	// Check Redis connection
+	// Check broker connection
+	if _, err := broker.NewConnection(); err != nil {
+		app.logger.Error("Readiness check failed: broker connection error", "error", err)
+		http.Error(w, "Broker not ready", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Check cache connection
 	if err := app.redis.Ping(ctx).Err(); err != nil {
-		app.logger.Error("Readiness check failed: redis ping error", "error", err)
-		http.Error(w, "redis not ready", http.StatusServiceUnavailable)
+		app.logger.Error("Readiness check failed: cache ping error", "error", err)
+		http.Error(w, "cache not ready", http.StatusServiceUnavailable)
 		return
 	}
 

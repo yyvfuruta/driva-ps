@@ -12,7 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/yyvfuruta/driva-ps/internal/broker"
@@ -26,7 +25,7 @@ type application struct {
 	db     *sql.DB
 	broker *broker.Broker
 	models models.Models
-	redis  *redis.Client
+	cache  *cache.Cache
 	logger *slog.Logger
 }
 
@@ -69,9 +68,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	rdb, err := cache.NewConnection()
+	c, err := cache.New()
 	if err != nil {
-		logger.Error("Failed to connect to Redis", "error", err)
+		logger.Error("Failed to connect to cache", "error", err)
 		os.Exit(1)
 	}
 
@@ -79,7 +78,7 @@ func main() {
 		db:     db,
 		broker: b,
 		models: models.New(db),
-		redis:  rdb,
+		cache:  c,
 		logger: logger,
 	}
 

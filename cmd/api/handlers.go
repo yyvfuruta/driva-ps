@@ -19,13 +19,13 @@ func (app *application) createOrderHandler(w http.ResponseWriter, r *http.Reques
 	var input models.Order
 
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		errorResponse(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	idempotencyKey := r.Header.Get("X-Idempotency-Key")
 	if idempotencyKey == "" {
-		http.Error(w, "X-Idempotency-Key empty", http.StatusBadRequest)
+		errorResponse(w, http.StatusBadRequest, "Header X-Idempotency-Key empty")
 		return
 	}
 
@@ -34,16 +34,7 @@ func (app *application) createOrderHandler(w http.ResponseWriter, r *http.Reques
 	// If idempotencyKey already exists.
 	key, err := app.models.IdempotencyKey.Get(ctx, idempotencyKey)
 	if err == nil {
-		response := struct {
-			OrderID uuid.UUID `json:"order_id"`
-			Message string    `json:"message"`
-		}{
-			OrderID: key.OrderID,
-			Message: "Order already exists. Use GET /orders/{id}",
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(response)
+		writeJSON(w, http.StatusOK, envelope{"order_id": key.OrderID, "message": "Order already exists."}, nil)
 		return
 	}
 
@@ -60,23 +51,25 @@ func (app *application) createOrderHandler(w http.ResponseWriter, r *http.Reques
 	v := validator.New()
 	models.ValidateOrder(v, order)
 	if !v.Valid() {
-		http.Error(w, fmt.Sprintf("Failed validation: %v", v.Errors), http.StatusBadRequest)
+		writeJSON(w, http.StatusOK, envelope{"order_id": order.ID, "message": v.Errors}, nil)
 		return
 	}
 
+	app.logger.Info("Order created", "order_status", order.Status, "order_id", order.ID)
+
 	if err := app.models.Order.Insert(ctx, order); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		errorResponse(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	if err := app.models.IdempotencyKey.Insert(ctx, idempotencyKey, order.ID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		errorResponse(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	body, err := json.Marshal(order)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		errorResponse(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -86,28 +79,18 @@ func (app *application) createOrderHandler(w http.ResponseWriter, r *http.Reques
 		broker.OrderCreatedRoutingKey,
 		body,
 	); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		errorResponse(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	response := struct {
-		ID      uuid.UUID `json:"id"`
-		Message string    `json:"msg"`
-	}{
-		ID:      order.ID,
-		Message: "Order created succesfully",
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(response)
+	writeJSON(w, http.StatusCreated, envelope{"data": map[string]any{"order_id": order.ID, "message": "Order created succesfully"}}, nil)
 }
 
 func (app *application) getOrderHandler(w http.ResponseWriter, r *http.Request) {
 	idStr := r.URL.Path[len("/orders/"):]
 	orderID, err := uuid.Parse(idStr)
 	if err != nil {
-		http.Error(w, "Invalid order ID", http.StatusBadRequest)
+		errorResponse(w, http.StatusBadRequest, "Invalid order ID")
 		return
 	}
 
@@ -115,23 +98,24 @@ func (app *application) getOrderHandler(w http.ResponseWriter, r *http.Request) 
 
 	// Check cache:
 	cacheKey := fmt.Sprintf("order:%s", idStr)
-	cachedData, err := app.redis.Get(ctx, cacheKey).Result()
+	cachedData, err := app.cache.Get(ctx, cacheKey)
 	if err == nil {
 		app.logger.Info("Returing cached order", "order_id", idStr)
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("X-Cache", "HIT")
-		w.Write([]byte(cachedData))
+		headers := make(http.Header)
+		headers.Set("X-Cache", "HIT")
+		var structuredData json.RawMessage = []byte(cachedData)
+		writeJSON(w, http.StatusOK, envelope{"data": structuredData}, headers)
 		return
 	}
 	if err != redis.Nil {
-		http.Error(w, "Redis error: "+err.Error(), http.StatusInternalServerError)
+		errorResponse(w, http.StatusInternalServerError, fmt.Sprintf("Cache error: %v", err))
 		return
 	}
 
 	// Check DB:
 	order, err := app.models.Order.Get(ctx, orderID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		errorResponse(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -140,14 +124,14 @@ func (app *application) getOrderHandler(w http.ResponseWriter, r *http.Request) 
 	if order.Status == "completed" {
 		orderEnriched, err = app.models.Enrichment.Get(ctx, orderID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			errorResponse(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 
 	response := struct {
 		Order         *models.Order           `json:"order"`
-		OrderEnriched *models.OrderEnrichment `json:"enriched_data"`
+		OrderEnriched *models.OrderEnrichment `json:"order_enriched"`
 	}{
 		Order:         order,
 		OrderEnriched: orderEnriched,
@@ -155,28 +139,22 @@ func (app *application) getOrderHandler(w http.ResponseWriter, r *http.Request) 
 
 	responseJSON, err := json.Marshal(response)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		errorResponse(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	// Cache reponse:
-	if err := app.redis.Set(ctx, cacheKey, responseJSON, 1*time.Minute).Err(); err != nil {
+	if err := app.cache.Set(ctx, cacheKey, responseJSON, 1*time.Minute); err != nil {
 		app.logger.Error("Could not save order to cache", "error", err)
 	}
+
 	app.logger.Info("Saving order to cache", "order_id", response.Order.ID)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]any{"order": order, "order_enriched": orderEnriched}}, nil)
 }
 
 func (app *application) healthzHandler(w http.ResponseWriter, r *http.Request) {
-	response := map[string]string{
-		"status": "alive",
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	writeJSON(w, http.StatusOK, envelope{"status": "alive"}, nil)
 }
 
 func (app *application) readyzHandler(w http.ResponseWriter, r *http.Request) {
@@ -186,29 +164,23 @@ func (app *application) readyzHandler(w http.ResponseWriter, r *http.Request) {
 	// Check database connection
 	if err := app.db.PingContext(ctx); err != nil {
 		app.logger.Error("Readiness check failed: database ping error", "error", err)
-		http.Error(w, "database not ready", http.StatusServiceUnavailable)
+		errorResponse(w, http.StatusServiceUnavailable, "Database not ready")
 		return
 	}
 
 	// Check broker connection
 	if _, err := broker.NewConnection(); err != nil {
 		app.logger.Error("Readiness check failed: broker connection error", "error", err)
-		http.Error(w, "Broker not ready", http.StatusServiceUnavailable)
+		errorResponse(w, http.StatusServiceUnavailable, "Broker not ready")
 		return
 	}
 
 	// Check cache connection
-	if err := app.redis.Ping(ctx).Err(); err != nil {
+	if err := app.cache.Ping(ctx); err != nil {
 		app.logger.Error("Readiness check failed: cache ping error", "error", err)
-		http.Error(w, "cache not ready", http.StatusServiceUnavailable)
+		errorResponse(w, http.StatusServiceUnavailable, "Cache not ready")
 		return
 	}
 
-	response := map[string]string{
-		"status": "ready",
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	writeJSON(w, http.StatusOK, envelope{"status": "ready"}, nil)
 }

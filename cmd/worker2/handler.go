@@ -28,21 +28,22 @@ func (h *handler) HandleMessage(ctx context.Context, msg amqp.Delivery) error {
 	}
 	h.logger.Info("Received a message for enrichment", "order_id", input.ID)
 
-	retryCount := retryCount(msg.Headers)
-	if retryCount >= maxRetries {
-		if err := h.models.Order.Update(ctx, input.ID, "failed"); err != nil {
-			h.logger.Error("Error updating order", "error", err)
-		} else {
-			h.logger.Info("Order exceded maximum retries allowed", "order_id", input.ID)
+	count := retryCount(msg.Headers)
+	if count >= maxRetries {
+		input.Status = "failed"
+		if err := h.models.Order.Update(ctx, input.ID, input.Status); err != nil {
+			return fmt.Errorf("Error updating order", "error", err)
 		}
+		h.logger.Error("Order exceded maximum retries allowed", "order_id", input.ID)
+		h.logger.Info("Order status updated", "order_status", input.Status, "order_id", input.ID)
 
-		// Do not want to send NACK again:
+		// Do not send NACK again:
 		return nil
 	}
 
 	// Failure simulation:
 	if strings.Contains(input.CustomerID, "f") {
-		return fmt.Errorf("Simulated failure)")
+		return fmt.Errorf("Simulated failure.")
 	}
 
 	// Data enrichment simulation:

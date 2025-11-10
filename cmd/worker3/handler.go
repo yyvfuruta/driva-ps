@@ -21,9 +21,10 @@ func (h *handler) HandleMessage(ctx context.Context, msg amqp.Delivery) error {
 		return err
 	}
 
-	h.logger.Info("Received a message enriched", "order_id", input.ID)
+	input.Status = "completed"
+	h.logger.Info("Order status updated", "order_status", input.Status, "order_id", input.ID)
 
-	if err := h.models.Order.Update(ctx, input.ID, "completed"); err != nil {
+	if err := h.models.Order.Update(ctx, input.ID, input.Status); err != nil {
 		return err
 	}
 

@@ -24,9 +24,10 @@ func (h *handler) HandleMessage(ctx context.Context, msg amqp.Delivery) error {
 	}
 
 	order.Status = "processing"
-	if err := h.models.Order.Update(ctx, order.ID, "processing"); err != nil {
+	if err := h.models.Order.Update(ctx, order.ID, order.Status); err != nil {
 		return err
 	}
+	h.logger.Info("Order status updated", "order_status", order.Status, "order_id", order.ID)
 
 	// Marshal because order.Status changed:
 	body, err := json.Marshal(order)

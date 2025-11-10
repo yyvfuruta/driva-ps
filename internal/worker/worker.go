@@ -56,11 +56,13 @@ func (w *Worker) Run(handler Handlerer) {
 					msg.Nack(false, false)
 					return
 				}
+
 				if err := handler.HandleMessage(ctx, msg); err != nil {
 					logger.Error("Error handling message", "error", err)
 					msg.Nack(false, false)
-					return
+					continue
 				}
+
 				msg.Ack(false)
 			}
 		}

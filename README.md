@@ -4,6 +4,26 @@
 
 Você pode subir o ambiente localmente com Docker ou com KinD/Minikube.
 
+### Deploy com Kubernetes
+
+Requisitos:
+- Docker
+- KinD
+
+```sh
+# Para criar o cluster:
+kind create cluster
+
+# Aplicar os manifestos:
+kubectl apply -k ./k8s
+
+# Para acessar a API localhost:
+kubectl port-forward svc/api 8080:8080
+```
+
+> [!NOTE]
+> Com o deploy no Kubernetes, não precisa rodar as migrations. Ela vai rodar automaticamente.
+
 ### Deploy com Docker
 
 Requisitos:
@@ -49,22 +69,6 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 ```
-### Deploy com Kubernetes
-
-Requisitos:
-- Docker
-- KinD/Minikube
-
-```sh
-# Para criar o cluster:
-kind create cluster
-
-# Aplicar os manifestos:
-kubectl apply -k ./k8s
-```
-
-> [!NOTE]
-> Com o deploy no Kubernetes, não precisa rodar as migrations. Ela vai rodar automaticamente.
 
 ## Uso
 
@@ -73,11 +77,9 @@ kubectl apply -k ./k8s
 #### Para criar um pedido
 
 ```sh
-IDEMPOTENCY_KEY="$(uuid)"
-
 curl -XPOST --location 'http://localhost:8080/orders' \
 	-H 'Content-Type: application/json' \
-	-H "X-Idempotency-Key: $IDEMPOTENCY_KEY" \
+	-H "X-Idempotency-Key: asdf" \
 	-H 'Authorization: Bearer cecd24ae-bbd6-11f0-bbc0-2c0da77e0ef5' \
 	--data '{
 		"customer_id": "123",
@@ -102,7 +104,7 @@ criar o pedido.
 
 ```sh
 # Para consultar um pedido com id $ID:
-curl $HOST:$PORT/orders/$ID
+curl localhost:8080/orders/$ID
 ```
 
 ### Como simular uma falha no enriquecimento do dado
@@ -110,11 +112,9 @@ curl $HOST:$PORT/orders/$ID
 Basta ter o caracter `f` no campo `customer_id`:
 
 ```sh
-IDEMPOTENCY_KEY="$(uuid)"
-
 curl -XPOST --location 'http://localhost:8080/orders' \
 	-H 'Content-Type: application/json' \
-	-H "X-Idempotency-Key: $IDEMPOTENCY_KEY" \
+	-H "X-Idempotency-Key: asdf" \
 	-H 'Authorization: Bearer cecd24ae-bbd6-11f0-bbc0-2c0da77e0ef5' \
 	--data '{
 		"customer_id": "123f",
@@ -134,11 +134,9 @@ curl -XPOST --location 'http://localhost:8080/orders' \
 
 ## Como ver os registros do banco
 
-Dentro do container do PostgreSQL:
-
 ```sh
 # Para se conectar no banco:
-psql "host=localhost port=5432 user=admin password=asdf dbname=app"
+kubectl exec -it po/postgres-0 -- psql "host=localhost port=5432 user=admin password=asdf dbname=app"
 
 # Para consultar as tabelas existentes:
 app=# \dt
@@ -152,7 +150,7 @@ app=# SELECT * FROM orders;
 Dentro do container do Redis:
 
 ```sh
-redis-cli
+kubectl exec -it pod/$NOME_DO_POD_DO_REDIS -- redis-cli
 
 # Para listar todas as chaves:
 > KEYS *

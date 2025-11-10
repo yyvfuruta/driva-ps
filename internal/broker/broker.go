@@ -1,3 +1,4 @@
+// Package broker provides a wrapper around the amqp client.
 package broker
 
 import (
@@ -8,6 +9,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
+// Broker is a wrapper around the amqp client.
 type Broker struct {
 	Channel *amqp.Channel
 }
@@ -56,6 +58,7 @@ func NewConnection() (*amqp.Connection, error) {
 	return conn, nil
 }
 
+// Setup declares an exchange, a queue, and binds the queue to the exchange.
 func (b *Broker) Setup(
 	exchangeName,
 	exchangeType,
@@ -102,6 +105,7 @@ func (b *Broker) Setup(
 	return nil
 }
 
+// Publish publishes a message to an exchange.
 func (b *Broker) Publish(ctx context.Context, exchange, routingKey string, body []byte) error {
 	return b.Channel.PublishWithContext(ctx,
 		exchange,   // exchange
@@ -115,6 +119,7 @@ func (b *Broker) Publish(ctx context.Context, exchange, routingKey string, body 
 	)
 }
 
+// Consume consumes messages from a queue.
 func (b *Broker) Consume(queueName string) (<-chan amqp.Delivery, error) {
 	d, err := b.Channel.Consume(
 		queueName, // queue

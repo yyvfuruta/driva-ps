@@ -10,6 +10,7 @@ import (
 	"github.com/yyvfuruta/driva-ps/internal/validator"
 )
 
+// Order represents an order.
 type Order struct {
 	ID          uuid.UUID   `json:"id"`
 	CustomerID  string      `json:"customer_id"`
@@ -20,6 +21,7 @@ type Order struct {
 	Items       []OrderItem `json:"items"`
 }
 
+// ValidateOrder validates an order.
 func ValidateOrder(v *validator.Validator, order *Order) {
 	v.Check(order.CustomerID != "", "customer_id", "must be provided")
 
@@ -37,6 +39,7 @@ func ValidateOrder(v *validator.Validator, order *Order) {
 	}
 }
 
+// OrderItem represents an item in an order.
 type OrderItem struct {
 	ID      int       `json:"id"`
 	OrderID uuid.UUID `json:"order_id"`
@@ -44,10 +47,12 @@ type OrderItem struct {
 	Qty     int       `json:"qty"`
 }
 
+// OrderModel is a wrapper for the database connection.
 type OrderModel struct {
 	DB *sql.DB
 }
 
+// Get gets an order from the database by ID.
 func (o OrderModel) Get(ctx context.Context, orderID uuid.UUID) (*Order, error) {
 	order := &Order{}
 	row := o.DB.QueryRowContext(
@@ -82,6 +87,7 @@ func (o OrderModel) Get(ctx context.Context, orderID uuid.UUID) (*Order, error) 
 	return order, nil
 }
 
+// Insert inserts an order into the database.
 func (o OrderModel) Insert(ctx context.Context, order *Order) error {
 	tx, err := o.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -120,6 +126,7 @@ func (o OrderModel) Insert(ctx context.Context, order *Order) error {
 	return tx.Commit()
 }
 
+// Update updates an order status in the database.
 func (o OrderModel) Update(ctx context.Context, orderID uuid.UUID, status string) error {
 	_, err := o.DB.ExecContext(
 		ctx,

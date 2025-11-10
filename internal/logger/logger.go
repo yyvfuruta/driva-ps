@@ -1,3 +1,4 @@
+// Package logger provides a configured slog logger.
 package logger
 
 import (

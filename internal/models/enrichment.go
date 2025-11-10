@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// OrderEnrichment represents the enriched data for an order.
 type OrderEnrichment struct {
 	ID        int       `json:"id"`
 	OrderID   uuid.UUID `json:"order_id"`
@@ -16,10 +17,12 @@ type OrderEnrichment struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// OrderEnrichmentModel is a wrapper for the database connection.
 type OrderEnrichmentModel struct {
 	DB *sql.DB
 }
 
+// Insert inserts an order enrichment into the database.
 func (o *OrderEnrichmentModel) Insert(ctx context.Context, enrichment *OrderEnrichment) error {
 	if enrichment == nil {
 		return fmt.Errorf("enrichment can't be nil")
@@ -47,7 +50,7 @@ func (o *OrderEnrichmentModel) Insert(ctx context.Context, enrichment *OrderEnri
 	return err
 }
 
-// Get busca um OrderEnrichment pelo order_id.
+// Get gets an order enrichment from the database.
 func (o *OrderEnrichmentModel) Get(ctx context.Context, orderID uuid.UUID) (*OrderEnrichment, error) {
 	if o.DB == nil {
 		return nil, fmt.Errorf("enrichment.DB can't be nil")

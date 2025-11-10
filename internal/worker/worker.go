@@ -1,3 +1,4 @@
+// Package worker provides a generic worker that consumes messages from a queue.
 package worker
 
 import (
@@ -12,10 +13,12 @@ import (
 	"github.com/yyvfuruta/driva-ps/internal/logger"
 )
 
+// Handlerer is an interface for handling messages.
 type Handlerer interface {
 	HandleMessage(ctx context.Context, msg amqp.Delivery) error
 }
 
+// Worker is a generic worker that consumes messages from a queue.
 type Worker struct {
 	queueName string
 	broker    *broker.Broker
@@ -28,6 +31,7 @@ func New(queueName string, broker *broker.Broker) *Worker {
 	}
 }
 
+// Run starts the worker.
 func (w *Worker) Run(handler Handlerer) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

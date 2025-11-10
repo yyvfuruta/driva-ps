@@ -1,7 +1,9 @@
+// Package models provides the data models and database access functions.
 package models
 
 import "database/sql"
 
+// Models is a wrapper for all the models.
 type Models struct {
 	Order          OrderModel
 	IdempotencyKey IdempotencyKeyModel

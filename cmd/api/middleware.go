@@ -10,7 +10,7 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		secretToken := os.Getenv("AUTH_TOKEN")
 		if secretToken == "" {
-			errorResponse(w, http.StatusIntervalServerError, "AUTH_TOKEN not set")
+			errorResponse(w, http.StatusInternalServerError, "AUTH_TOKEN not set")
 			return
 		}
 

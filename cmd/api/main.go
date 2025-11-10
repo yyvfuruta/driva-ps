@@ -12,31 +12,29 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
-	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/yyvfuruta/driva-ps/internal/broker"
 	"github.com/yyvfuruta/driva-ps/internal/cache"
 	"github.com/yyvfuruta/driva-ps/internal/database"
 	"github.com/yyvfuruta/driva-ps/internal/logger"
 	"github.com/yyvfuruta/driva-ps/internal/models"
-	"github.com/yyvfuruta/driva-ps/internal/queue"
 )
 
 type application struct {
 	db     *sql.DB
-	rabbit *amqp.Connection
+	broker *broker.Broker
 	models models.Models
-	redis  *redis.Client
+	cache  *cache.Cache
 	logger *slog.Logger
 }
 
 func main() {
+	logger := logger.New()
+
 	var dev bool
 	flag.BoolVar(&dev, "dev", false, "Enable godotenv")
 	flag.Parse()
-
-	logger := logger.New()
 
 	if dev {
 		err := godotenv.Load()
@@ -53,32 +51,36 @@ func main() {
 	}
 	defer db.Close()
 
-	rabbitConn, err := queue.NewConnection()
+	b, err := broker.New()
 	if err != nil {
-		logger.Error("Failed to connect to RabbitMQ", "error", err)
+		logger.Error("Failed to connect to broker", "error", err)
 		os.Exit(1)
 	}
-	defer rabbitConn.Close()
 
-	rdb, err := cache.NewConnection()
+	if err := b.Setup(
+		broker.OrderEventsExchangeName,
+		broker.OrderEventsExchangeType,
+		broker.OrderCreatedQueue,
+		broker.OrderCreatedRoutingKey,
+		nil,
+	); err != nil {
+		logger.Error("Failed to setup broker", "error", err)
+		os.Exit(1)
+	}
+
+	c, err := cache.New()
 	if err != nil {
-		logger.Error("Failed to connect to Redis", "error", err)
+		logger.Error("Failed to connect to cache", "error", err)
 		os.Exit(1)
 	}
 
 	app := &application{
 		db:     db,
-		rabbit: rabbitConn,
-		models: models.NewModels(db),
-		redis:  rdb,
+		broker: b,
+		models: models.New(db),
+		cache:  c,
 		logger: logger,
 	}
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /orders", authMiddleware(app.createOrderHandler))
-	mux.HandleFunc("GET /orders/{id}", app.getOrderHandler)
-	mux.HandleFunc("GET /healthz", app.healthzHandler)
-	mux.HandleFunc("GET /readyz", app.readyzHandler)
 
 	port := os.Getenv("API_PORT")
 	if port == "" {
@@ -88,7 +90,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%s", port),
-		Handler: mux,
+		Handler: app.routes(),
 	}
 
 	go func() {

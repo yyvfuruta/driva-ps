@@ -1,106 +1,52 @@
+// Worker1 is responsible for:
+// 1. Consumes the messages published from the API.
+// 2. Update message status to "processing".
+// 3. Publish the message to the next worker ordering the data enrichment.
 package main
 
 import (
-	"context"
-	"encoding/json"
 	"flag"
 	"os"
-	"os/signal"
-	"sync"
-	"syscall"
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
-	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/yyvfuruta/driva-ps/internal/broker"
 	"github.com/yyvfuruta/driva-ps/internal/database"
 	"github.com/yyvfuruta/driva-ps/internal/logger"
 	"github.com/yyvfuruta/driva-ps/internal/models"
-	"github.com/yyvfuruta/driva-ps/internal/queue"
+	"github.com/yyvfuruta/driva-ps/internal/worker"
 )
 
 func main() {
+	logger := logger.New()
+
 	var dev bool
 
 	flag.BoolVar(&dev, "dev", false, "Enable godotenv")
 	flag.Parse()
 
-	logger := logger.New()
-
 	if dev {
-		err := godotenv.Load()
-		if err != nil {
+		if err := godotenv.Load(); err != nil {
 			logger.Error("Error loading .env file", "error", err)
 			os.Exit(1)
 		}
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	rabbit, err := queue.NewConnection()
+	b, err := broker.New()
 	if err != nil {
-		logger.Error("Failed to connect to RabbitMQ", "error", err)
+		logger.Error("Failed to create new broker", "error", err)
 		os.Exit(1)
 	}
-	defer rabbit.Close()
+	defer b.Channel.Close()
 
-	ch, err := rabbit.Channel()
-	if err != nil {
-		logger.Error("Failed to open a channel", "error", err)
-		os.Exit(1)
-	}
-	defer ch.Close()
-
-	err = ch.ExchangeDeclare(
-		"order.events", // name
-		"direct",       // type
-		true,           // durable
-		false,          // auto-deleted
-		false,          // internal
-		false,          // no-wait
-		nil,            // arguments
-	)
-	if err != nil {
-		logger.Error("Failed to declare an exchange", "error", err)
-		os.Exit(1)
-	}
-
-	q, err := ch.QueueDeclare(
-		"order.created", // name
-		true,            // durable
-		false,           // delete when unused
-		false,           // exclusive
-		false,           // no-wait
-		nil,             // arguments
-	)
-	if err != nil {
-		logger.Error("Failed to declare a queue", "error", err)
-		os.Exit(1)
-	}
-
-	err = ch.QueueBind(
-		q.Name,          // queue name
-		"order.created", // routing key
-		"order.events",  // exchange
-		false,           // no-wait
-		nil,             // args
-	)
-	if err != nil {
-		logger.Error("Failed to bind a queue", "error", err)
-		os.Exit(1)
-	}
-
-	msgs, err := ch.Consume(
-		q.Name, // queue
-		"",     // consumer
-		false,  // auto-ack
-		false,  // exclusive
-		false,  // no-local
-		false,  // no-wait
-		nil,    // args
-	)
-	if err != nil {
-		logger.Error("Failed to register a consumer", "error", err)
+	if err := b.Setup(
+		broker.OrderEventsExchangeName,
+		broker.OrderEventsExchangeType,
+		broker.OrderCreatedQueue,
+		broker.OrderCreatedRoutingKey,
+		nil, // queueArgs
+	); err != nil {
+		logger.Error("Failed to create new broker", "error", err)
 		os.Exit(1)
 	}
 
@@ -111,70 +57,16 @@ func main() {
 	}
 	defer db.Close()
 
-	appModels := models.NewModels(db)
+	h := &handler{
+		models: models.New(db),
+		logger: logger,
+		broker: b,
+	}
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			select {
-			case <-ctx.Done():
-				logger.Info("Shutting down worker...")
-				return
-			case msg, ok := <-msgs:
-				if !ok {
-					logger.Info("Channel closed, shutting down.")
-					return
-				}
-				var order models.Order
-				if err := json.Unmarshal(msg.Body, &order); err != nil {
-					logger.Error("Error decoding message", "error", err)
-					msg.Nack(false, false)
-					continue
-				}
-				logger.Info("Received order", "order_id", order.ID)
+	w := worker.New(
+		broker.OrderCreatedQueue,
+		b,
+	)
 
-				body, err := json.Marshal(order)
-				if err != nil {
-					logger.Error("Error marshalling order", "error", err)
-					msg.Nack(false, false)
-					continue
-				}
-
-				err = appModels.Order.Update(ctx, order.ID, "processing")
-				if err != nil {
-					logger.Error("Error updating order", "error", err)
-					msg.Nack(false, false)
-					continue
-				}
-
-				if err := ch.PublishWithContext(ctx,
-					"order.events",               // exchange
-					"order.enrichment.requested", // routing key
-					false,                        // mandatory
-					false,                        // immediate
-					amqp.Publishing{
-						ContentType: "application/json",
-						Body:        body,
-					},
-				); err != nil {
-					logger.Error("Error publishing message", "error", err)
-					msg.Nack(false, false)
-					continue
-				}
-
-				msg.Ack(false)
-			}
-		}
-	}()
-
-	logger.Info(" [*] Waiting for messages. To exit press CTRL+C")
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	<-sigCh
-
-	cancel()
-	wg.Wait()
-	logger.Info("Worker shutdown complete.")
+	w.Run(h)
 }
